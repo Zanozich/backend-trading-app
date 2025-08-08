@@ -1,24 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as readline from 'readline';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CandleEntity } from '../entities/candle.entity';
 import { SymbolEntity } from '../entities/symbol.entity';
 import { TimeframeEntity } from '../entities/timeframe.entity';
-import { validateCandle } from './validate-candle';
+import { Candle } from './types';
+import { getOrCreateSymbol } from './helpers/get-or-create-symbol';
+import { getOrCreateTimeframe } from './helpers/get-or-create-timeframe';
+import { saveCandlesToDb } from './helpers/save-candles-to-db';
 
 @Injectable()
 export class DataCenterService {
-  private readonly filePath = path.join(
-    __dirname,
-    '..',
-    '..',
-    'data',
-    'Binance_BTCUSDT_1h.csv',
-  );
-
   constructor(
     @InjectRepository(SymbolEntity)
     private readonly symbolRepo: Repository<SymbolEntity>,
@@ -28,60 +20,48 @@ export class DataCenterService {
     private readonly candleRepo: Repository<CandleEntity>,
   ) {}
 
-  async importCandlesFromCsv(): Promise<void> {
-    const fileStream = fs.createReadStream(this.filePath);
-    const rl = readline.createInterface({
-      input: fileStream,
-      crlfDelay: Infinity,
+  /**
+   * Импортирует свечи в базу данных, не зная их источник.
+   * Источник должен передать symbol, timeframe и свечи.
+   */
+  async importCandles(
+    candles: Candle[],
+    symbolName: string,
+    timeframeName: string,
+  ): Promise<void> {
+    const symbol = await getOrCreateSymbol(this.symbolRepo, symbolName);
+    const timeframe = await getOrCreateTimeframe(
+      this.timeframeRepo,
+      timeframeName,
+    );
+    await saveCandlesToDb(candles, this.candleRepo, symbol, timeframe);
+  }
+
+  async getCandlesFromDb(
+    symbolName: string,
+    timeframeName: string,
+  ): Promise<Candle[]> {
+    const symbol = await this.symbolRepo.findOne({
+      where: { name: symbolName },
     });
-
-    const symbolName = 'BTCUSDT';
-    const timeframeName = '1h';
-
-    // Найти или создать символ
-    let symbol = await this.symbolRepo.findOne({ where: { name: symbolName } });
-    if (!symbol) {
-      symbol = this.symbolRepo.create({ name: symbolName });
-      await this.symbolRepo.save(symbol);
-    }
-
-    // Найти или создать таймфрейм
-    let timeframe = await this.timeframeRepo.findOne({
+    const timeframe = await this.timeframeRepo.findOne({
       where: { name: timeframeName },
     });
-    if (!timeframe) {
-      timeframe = this.timeframeRepo.create({ name: timeframeName });
-      await this.timeframeRepo.save(timeframe);
-    }
 
-    const candles: CandleEntity[] = [];
+    if (!symbol || !timeframe) return [];
 
-    for await (const line of rl) {
-      if (!line.trim()) continue;
+    const candles = await this.candleRepo.find({
+      where: { symbol: { id: symbol.id }, timeframe: { id: timeframe.id } },
+      order: { timestamp: 'ASC' },
+    });
 
-      const parts = line.split(',');
-      const numericParts = parts.map((p, i) =>
-        i === 1 || i === 2 ? p : Number(p),
-      );
-
-      const validated = validateCandle(numericParts as any);
-      if (!validated) continue;
-
-      const candle = this.candleRepo.create({
-        timestamp: validated.time,
-        open: validated.open,
-        high: validated.high,
-        low: validated.low,
-        close: validated.close,
-        volume: validated.volume,
-        symbol,
-        timeframe,
-      });
-
-      candles.push(candle);
-    }
-
-    await this.candleRepo.save(candles);
-    console.log(`✅ Imported ${candles.length} candles into DB`);
+    return candles.map((c) => ({
+      time: c.timestamp,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      volume: c.volume,
+    }));
   }
 }

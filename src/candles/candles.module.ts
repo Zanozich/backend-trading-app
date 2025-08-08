@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CandlesService } from './candles.service';
 import { CandlesController } from './candles.controller';
-import { DataCenterModule } from 'src/data-center/data-center.module';
+import { DataCenterModule } from '../data-center/data-center.module';
 
 @Module({
   imports: [DataCenterModule],
