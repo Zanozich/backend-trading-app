@@ -1,4 +1,4 @@
-import { Candle } from '../interfaces/candle.interface';
+import { Candle } from '../../data-center/types';
 import { intervalToMs } from './interval-to-ms';
 
 export interface Gap {
@@ -17,14 +17,14 @@ export function findMissingCandleGaps(
   symbol: string,
   interval: string,
 ): Gap[] {
-  const sorted = [...candles].sort((a, b) => a.timestamp - b.timestamp);
+  const sorted = [...candles].sort((a, b) => a.time - b.time);
   const ms = intervalToMs(interval);
 
   const gaps: Gap[] = [];
 
   for (let i = 1; i < sorted.length; i++) {
-    const expected = sorted[i - 1].timestamp + ms;
-    const actual = sorted[i].timestamp;
+    const expected = sorted[i - 1].time + ms;
+    const actual = sorted[i].time;
 
     if (actual > expected) {
       gaps.push({

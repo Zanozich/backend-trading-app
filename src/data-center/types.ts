@@ -17,4 +17,5 @@ export interface Candle {
   high: number;
   low: number;
   close: number;
+  volume: number;
 }
