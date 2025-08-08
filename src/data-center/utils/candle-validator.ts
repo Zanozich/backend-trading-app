@@ -1,4 +1,4 @@
-import { Candle } from '../../data-center/types';
+import { Candle } from '../types';
 import { intervalToMs } from './interval-to-ms';
 
 export interface Gap {
