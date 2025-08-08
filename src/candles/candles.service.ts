@@ -1,40 +1,46 @@
 import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
-import { parse } from 'csv-parse/sync';
-
-export interface Candle {
-  time: number; // в секундах (UNIX timestamp)
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
+import * as readline from 'readline';
+import { Candle } from '../data-center/types';
+import { validateCandle } from '../data-center/validate-candle';
 
 @Injectable()
 export class CandlesService {
+  private readonly filePath = path.join(
+    __dirname,
+    '..',
+    '..',
+    'data',
+    'Binance_BTCUSDT_1h.csv',
+  );
+
   async getCandles(): Promise<Candle[]> {
-    const filePath = path.join(__dirname, '../../data/Binance_BTCUSDT_1h.csv');
-    const file = fs.readFileSync(filePath, 'utf8');
-
-    const records = parse(file, {
-      skip_empty_lines: true,
+    const fileStream = fs.createReadStream(this.filePath);
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
     });
 
-    const candles: Candle[] = records.map((row) => {
-      const [timestamp, , , open, high, low, close, volume] = row;
+    const candles: Candle[] = [];
 
-      return {
-        time: Math.floor(Number(timestamp) / 1000),
-        open: parseFloat(open),
-        high: parseFloat(high),
-        low: parseFloat(low),
-        close: parseFloat(close),
-        volume: parseFloat(volume),
-      };
-    });
+    for await (const line of rl) {
+      if (!line.trim()) continue;
 
-    return candles.reverse(); // CryptoDataDownload даёт от новых к старым
+      const parts = line.split(',');
+      const numericParts = parts.map((p, i) =>
+        i === 1 || i === 2 ? p : Number(p),
+      );
+
+      const validated = validateCandle(numericParts as any);
+      if (validated) {
+        candles.push(validated);
+      }
+    }
+
+    // Сортировка по времени (на всякий случай)
+    candles.sort((a, b) => a.time - b.time);
+
+    return candles;
   }
 }
