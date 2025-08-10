@@ -2,7 +2,7 @@ import { Repository, Between } from 'typeorm';
 import { SymbolEntity } from '../../entities/symbol.entity';
 import { TimeframeEntity } from '../../entities/timeframe.entity';
 import { CandleEntity } from '../../entities/candle.entity';
-import { Candle } from '../types';
+import { Candle } from 'src/domain/market.types';
 import { MarketType, ExchangeCode } from '../../domain/market.types';
 
 export async function getCandlesFromDb(

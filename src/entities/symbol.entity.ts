@@ -1,3 +1,4 @@
+import { ExchangeCode, MarketType } from 'src/domain/market.types';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -6,9 +7,6 @@ import {
   Unique,
 } from 'typeorm';
 import { CandleEntity } from './candle.entity';
-
-export type MarketType = 'spot' | 'futures';
-export type ExchangeCode = 'binance' | 'bybit' | 'okx'; // расширяй по мере добавления провайдеров
 
 @Entity({ name: 'symbols' })
 @Unique(['name', 'type', 'exchange']) // ← составная уникальность

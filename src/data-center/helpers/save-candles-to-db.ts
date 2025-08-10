@@ -1,5 +1,5 @@
 import { Repository } from 'typeorm';
-import { Candle } from '../types';
+import { Candle } from 'src/domain/market.types';
 import { CandleEntity } from '../../entities/candle.entity';
 import { SymbolEntity } from '../../entities/symbol.entity';
 import { TimeframeEntity } from '../../entities/timeframe.entity';

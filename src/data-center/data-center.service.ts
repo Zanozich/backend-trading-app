@@ -48,6 +48,7 @@ export class DataCenterService {
     fromTimestamp?: number;
     toTimestamp?: number;
     limit?: number;
+    includePartialLatest?: boolean;
   }) {
     const provider = this.registry.get(args.exchange ?? 'binance');
 

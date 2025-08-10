@@ -8,6 +8,7 @@ import { MarketDataModule } from './providers/market-data.module';
 
 // когда буду делать repair-job
 // import { ScheduleModule } from '@nestjs/schedule';
+import { MetaModule } from './meta/meta.module';
 
 @Module({
   imports: [
@@ -15,7 +16,8 @@ import { MarketDataModule } from './providers/market-data.module';
     // ScheduleModule.forRoot(),
     MarketDataModule, // <-- провайдеры рынка и их реестр
     DataCenterModule, // <-- use-cases / application layer
-    MarketDataApiModule, // <-- HTTP API (контроллеры)
+    MarketDataApiModule,
+    MetaModule, // <-- HTTP API (контроллеры)
   ],
 })
 export class AppModule {}

@@ -1,9 +1,6 @@
 import { Repository } from 'typeorm';
-import {
-  SymbolEntity,
-  MarketType,
-  ExchangeCode,
-} from '../../entities/symbol.entity';
+import { SymbolEntity } from '../../entities/symbol.entity';
+import { ExchangeCode, MarketType } from 'src/domain/market.types';
 
 export async function getOrCreateSymbol(
   repo: Repository<SymbolEntity>,

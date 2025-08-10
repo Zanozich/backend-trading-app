@@ -21,6 +21,7 @@ import {
   HTTP_RETRY_MAX_DELAY_MS,
   HTTP_RETRY_JITTER,
   MAX_GAP_FETCHES,
+  TAIL_RECONCILIATION_BARS,
 } from '../../config/limits';
 
 // Универсальный ретрай-хелпер
@@ -55,6 +56,7 @@ export async function tryGetCandlesFromDbOrFetch(
     fromTimestamp?: number;
     toTimestamp?: number;
     limit?: number;
+    includePartialLatest?: boolean;
   },
 ) {
   const {
@@ -69,6 +71,7 @@ export async function tryGetCandlesFromDbOrFetch(
     fromTimestamp,
     toTimestamp,
     limit,
+    includePartialLatest = false,
   } = args;
 
   // 1) диапазон окна
@@ -77,11 +80,12 @@ export async function tryGetCandlesFromDbOrFetch(
     fromTimestamp,
     toTimestamp,
     limit,
+    includePartialLatest,
   });
 
   console.log(
     `[Orchestrator] range: FROM=${fromAligned} (${new Date(fromAligned).toISOString()}), ` +
-      `TO=${toAligned} (${new Date(toAligned).toISOString()}), stepMs=${step}, limit=${limitFinal}`,
+      `TO=${toAligned} (${new Date(toAligned).toISOString()}), stepMs=${step}, limit=${limitFinal}, includePartialLatest=${includePartialLatest}`,
   );
 
   // 2) читаем из БД
@@ -151,12 +155,47 @@ export async function tryGetCandlesFromDbOrFetch(
       },
     );
 
-    fetchedTotal += klines.length;
-    if (klines.length) {
-      await saveCandlesToDb(klines, candleRepo, symbol, timeframe);
+    // сохраняем только ЗАКРЫТЫЕ бары (доп. защита, если провайдер вернёт текущий бар)
+    const now = Date.now();
+    const closedOnly = klines.filter((c) => c.time + step <= now);
+    fetchedTotal += closedOnly.length;
+    if (closedOnly.length) {
+      await saveCandlesToDb(closedOnly, candleRepo, symbol, timeframe);
     }
   }
   console.log(`[Orchestrator] Binance fetched missing=${fetchedTotal}`);
+
+  // 5.1) (опц.) хвостовая реконсиляция последних K закрытых баров
+  // Перезапросить и upsert'нуть последние K баров, даже если "дыр" не было.
+  // Полезно на случай редких правок закрытых баров у провайдера.
+  if (TAIL_RECONCILIATION_BARS && TAIL_RECONCILIATION_BARS > 0) {
+    const k = Math.floor(TAIL_RECONCILIATION_BARS);
+    const tailStart = toAligned - step * (k - 1);
+    if (tailStart <= toAligned) {
+      const tail = await retry(
+        () =>
+          marketName.fetchCandles(
+            marketType,
+            symbolName.toUpperCase(),
+            timeframeName,
+            tailStart,
+            toAligned,
+          ),
+        {
+          retries: HTTP_MAX_RETRIES_MARKETDATA,
+          baseDelayMs: HTTP_RETRY_BASE_DELAY_MS,
+          factor: HTTP_RETRY_FACTOR,
+          maxDelayMs: HTTP_RETRY_MAX_DELAY_MS,
+          jitter: HTTP_RETRY_JITTER,
+        },
+      );
+      const now = Date.now();
+      const closedTail = tail.filter((c) => c.time + step <= now);
+      if (closedTail.length) {
+        await saveCandlesToDb(closedTail, candleRepo, symbol, timeframe);
+      }
+    }
+  }
 
   // 6) перечитываем по выровненному окну и отдаем не больше limit
   const after = await getCandlesFromDb(

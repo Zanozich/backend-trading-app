@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { ExchangeCode, MarketType } from 'src/domain/market.types';
 import { DataCenterService } from '../data-center/data-center.service';
-
-type MarketType = 'spot' | 'futures';
 
 @Injectable()
 export class MarketDataApiService {
@@ -11,9 +10,11 @@ export class MarketDataApiService {
     symbolName: string;
     timeframeName: string;
     marketType: MarketType;
+    exchange?: ExchangeCode;
     fromTimestamp?: number;
     toTimestamp?: number;
     limit?: number;
+    includePartialLatest?: boolean;
   }) {
     return this.dataCenterService.tryGetCandlesFromDbOrFetch(args);
   }
