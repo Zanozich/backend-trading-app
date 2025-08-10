@@ -1,2 +1,16 @@
+// Бизнес-лимиты API
 export const MAX_CANDLES_PER_REQUEST = 10_000; // наш глобальный cap
-export const BINANCE_PER_REQUEST_LIMIT = 1_000; // технический cap Binance
+
+// Параметры ретраев для внешних источников маркет-данных
+export const HTTP_MAX_RETRIES_MARKETDATA = 3;
+export const HTTP_RETRY_BASE_DELAY_MS = 250;
+export const HTTP_RETRY_FACTOR = 2; // экспоненциальный backoff
+export const HTTP_RETRY_MAX_DELAY_MS = 2_000;
+export const HTTP_RETRY_JITTER = true; // чуть «дрожи» для разведения шипов
+
+// ограничение на количество дыр/окн
+export const MAX_GAP_FETCHES = 3;
+
+// Repair job (ночной self-heal)
+export const REPAIR_JOB_MAX_RETRIES = 5;
+export const REPAIR_JOB_LOOKBACK_DAYS = 7;

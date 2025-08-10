@@ -3,6 +3,7 @@ import { SymbolEntity } from '../../entities/symbol.entity';
 import { TimeframeEntity } from '../../entities/timeframe.entity';
 import { CandleEntity } from '../../entities/candle.entity';
 import { Candle } from '../types';
+import { MarketType, ExchangeCode } from '../../domain/market.types';
 
 export async function getCandlesFromDb(
   symbolName: string,
@@ -13,17 +14,15 @@ export async function getCandlesFromDb(
     candleRepo: Repository<CandleEntity>;
     symbolRepo: Repository<SymbolEntity>;
     timeframeRepo: Repository<TimeframeEntity>;
-    // 👇 добавили marketType
-    marketType?: 'spot' | 'futures';
+    marketType: MarketType;
+    exchange: ExchangeCode;
   },
 ): Promise<Candle[]> {
-  const { symbolRepo, timeframeRepo, candleRepo, marketType } = deps;
+  const { symbolRepo, timeframeRepo, candleRepo, marketType, exchange } = deps;
 
-  // ищем символ по (name, type) — если type не передан, ищем только по name (на всякий)
+  // Ищем символ строго по (name, type, exchange)
   const symbol = await symbolRepo.findOne({
-    where: marketType
-      ? { name: symbolName, type: marketType }
-      : { name: symbolName },
+    where: { name: symbolName, type: marketType, exchange },
   });
   if (!symbol) return [];
 
@@ -32,7 +31,7 @@ export async function getCandlesFromDb(
   });
   if (!timeframe) return [];
 
-  // ⚠️ фильтруем по FK-колонкам, а не по связям
+  // Фильтруем по FK, используем диапазон по timestamp
   const rows = await candleRepo.find({
     where: {
       symbolId: symbol.id,

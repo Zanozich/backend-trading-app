@@ -3,17 +3,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { CandleEntity } from '../entities/candle.entity';
-import { SymbolEntity, MarketType } from '../entities/symbol.entity';
+import { SymbolEntity } from '../entities/symbol.entity';
 import { TimeframeEntity } from '../entities/timeframe.entity';
 
-import { Candle } from './types';
+import { ExchangeCode, MarketType } from 'src/domain/market.types';
+// Юзкейс-оркестратор: читает БД → дотягивает → сохраняет → перечитывает
 import { tryGetCandlesFromDbOrFetch } from './logic/try-get-candles';
-import { getOrCreateSymbol } from './helpers/get-or-create-symbol';
-import { getOrCreateTimeframe } from './helpers/get-or-create-timeframe';
-import { saveCandlesToDb } from './helpers/save-candles-to-db';
-
-import { Binance } from '../providers/binance/binance';
+// Read-only чтение диапазона из БД (без автофетча)
 import { getCandlesFromDb as getCandlesFromDbLogic } from './logic/get-candles-from-db';
+
+// Провайдеры бинанс, байбит и т.д.
+import { MarketDataRegistry } from 'src/providers/market-data.registry';
 
 @Injectable()
 export class DataCenterService {
@@ -27,83 +27,72 @@ export class DataCenterService {
     @InjectRepository(CandleEntity)
     private readonly candleRepo: Repository<CandleEntity>,
 
-    private readonly binance: Binance,
+    private readonly registry: MarketDataRegistry,
   ) {}
 
   /**
-   * Главная точка: сначала читаем БД, если пусто/не хватает — тянем с Binance,
-   * сохраняем в БД и отдаем результат.
-   * Все timestamps — в миллисекундах.
+   * Главная точка входа (Application Service):
+   * 1) нормализуем окно в оркестраторе
+   * 2) читаем БД
+   * 3) дотягиваем недостающее из провайдера (с ретраями)
+   * 4) сохраняем в БД
+   * 5) перечитываем и обрезаем по limit
+   *
+   * Все timestamps — миллисекунды (UTC).
    */
   async tryGetCandlesFromDbOrFetch(args: {
     symbolName: string;
     timeframeName: string;
     marketType: MarketType;
+    exchange?: ExchangeCode; // default 'binance' применяется в оркестраторе
     fromTimestamp?: number;
     toTimestamp?: number;
     limit?: number;
   }) {
+    const provider = this.registry.get(args.exchange ?? 'binance');
+
     return tryGetCandlesFromDbOrFetch({
       symbolRepo: this.symbolRepo,
       timeframeRepo: this.timeframeRepo,
       candleRepo: this.candleRepo,
-      binance: this.binance,
+      marketName: provider,
       ...args,
     });
   }
 
   /**
-   * Импортирует свечи в базу данных, не зная их источник.
-   * Источник должен передать symbol, timeframe и свечи.
+   * Read-only: просто прочитать свечи из БД по диапазону (без автофетча).
+   * Удобно для внутренних задач, когда знаем, что данные уже есть.
    */
-  async importCandles(
-    candles: Candle[],
-    symbolName: string,
-    timeframeName: string,
-    marketType: MarketType,
-  ): Promise<void> {
-    console.log(
-      `[DataCenter] importCandles start: ${symbolName} ${timeframeName} ${marketType}, candles=${candles.length}`,
-    );
-
-    if (!candles?.length) {
-      console.log('[DataCenter] no candles to import — skip');
-      return;
-    }
-
-    const symbol = await getOrCreateSymbol(
-      this.symbolRepo,
+  async getCandlesFromDb(args: {
+    symbolName: string;
+    timeframeName: string;
+    marketType: MarketType;
+    exchange?: ExchangeCode; // default 'binance'
+    fromTimestamp: number; // уже нормализованные ms
+    toTimestamp: number; // уже нормализованные ms
+  }) {
+    const {
       symbolName,
-      marketType,
-    );
-    const timeframe = await getOrCreateTimeframe(
-      this.timeframeRepo,
       timeframeName,
+      marketType,
+      exchange = 'binance',
+      fromTimestamp,
+      toTimestamp,
+    } = args;
+
+    return getCandlesFromDbLogic(
+      symbolName,
+      timeframeName,
+      fromTimestamp,
+      toTimestamp,
+      {
+        candleRepo: this.candleRepo,
+        symbolRepo: this.symbolRepo,
+        timeframeRepo: this.timeframeRepo,
+        marketType,
+        exchange,
+      },
     );
-
-    await saveCandlesToDb(candles, this.candleRepo, symbol, timeframe);
-
-    console.log('[DataCenter] importCandles done');
-  }
-
-  /**
-   * Прокси для обратной совместимости.
-   * Если даты не переданы — берём "с самого начала" и далеко в будущее.
-   * В БД у нас timestamp в СЕКУНДАХ.
-   */
-  async getCandlesFromDb(
-    symbolName: string,
-    timeframeName: string,
-    fromTimestamp?: number,
-    toTimestamp?: number,
-  ) {
-    const from = fromTimestamp ?? 0; // мс от эпохи
-    const to = toTimestamp ?? 4102444800000; // 2100-01-01 В МИЛЛИСЕКУНДАХ
-
-    return getCandlesFromDbLogic(symbolName, timeframeName, from, to, {
-      candleRepo: this.candleRepo,
-      symbolRepo: this.symbolRepo,
-      timeframeRepo: this.timeframeRepo,
-    });
   }
 }
