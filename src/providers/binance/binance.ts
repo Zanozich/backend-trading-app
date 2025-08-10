@@ -49,10 +49,13 @@ export class Binance {
 
     let from = startTime;
 
-    while (from < endTime) {
+    // 🚀 Ограничиваем endTime текущим моментом, чтобы не запрашивать будущее
+    const maxEndTime = Math.min(endTime, Date.now());
+
+    while (from < maxEndTime) {
       const to = Math.min(
         from + this._calculateStepMs(interval, limit),
-        endTime,
+        maxEndTime,
       );
 
       const { data } = await axios.get(url, {
@@ -69,7 +72,7 @@ export class Binance {
 
       for (const item of data) {
         result.push({
-          time: Math.floor(item[0] / 1000), // Binance возвращает миллисекунды
+          time: item[0], // Binance возвращает миллисекунды
           open: parseFloat(item[1]),
           high: parseFloat(item[2]),
           low: parseFloat(item[3]),

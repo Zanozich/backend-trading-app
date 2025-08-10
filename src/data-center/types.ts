@@ -12,7 +12,7 @@ export type RawCandle = [
 ];
 
 export interface Candle {
-  time: number; // timestamp in seconds (UTC)
+  time: number; // timestamp in milliseconds (UTC)
   open: number;
   high: number;
   low: number;

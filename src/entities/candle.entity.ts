@@ -3,19 +3,31 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
-  Index,
+  JoinColumn,
+  Unique,
 } from 'typeorm';
 import { SymbolEntity } from './symbol.entity';
 import { TimeframeEntity } from './timeframe.entity';
 
 @Entity({ name: 'candles' })
-@Index(['symbol', 'timeframe', 'timestamp'], { unique: true }) // для уникальности
+@Unique('candles_symbol_timeframe_timestamp_key', [
+  'symbolId',
+  'timeframeId',
+  'timestamp',
+])
 export class CandleEntity {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
-  timestamp!: number; // unix time (в секундах)
+  // В БД bigint (мс). В TS работаем как с number через transformer.
+  @Column({
+    type: 'bigint',
+    transformer: {
+      to: (v: number) => Math.trunc(v),
+      from: (v: string) => Number(v),
+    },
+  })
+  timestamp!: number;
 
   @Column('float')
   open!: number;
@@ -32,9 +44,23 @@ export class CandleEntity {
   @Column('float')
   volume!: number;
 
-  @ManyToOne(() => SymbolEntity, (symbol) => symbol.candles)
+  // ---------- FK: SYMBOL ----------
+  @Column()
+  symbolId!: number;
+
+  @ManyToOne(() => SymbolEntity, (symbol) => symbol.candles, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'symbolId' })
   symbol!: SymbolEntity;
 
-  @ManyToOne(() => TimeframeEntity, (timeframe) => timeframe.candles)
+  // ---------- FK: TIMEFRAME ----------
+  @Column()
+  timeframeId!: number;
+
+  @ManyToOne(() => TimeframeEntity, (timeframe) => timeframe.candles, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'timeframeId' })
   timeframe!: TimeframeEntity;
 }

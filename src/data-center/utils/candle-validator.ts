@@ -1,5 +1,5 @@
 import { Candle } from '../types';
-import { intervalToMs } from './interval-to-ms';
+import { getIntervalMs } from './interval-to-ms';
 
 export interface Gap {
   symbol: string;
@@ -18,7 +18,7 @@ export function findMissingCandleGaps(
   interval: string,
 ): Gap[] {
   const sorted = [...candles].sort((a, b) => a.time - b.time);
-  const ms = intervalToMs(interval);
+  const ms = getIntervalMs(interval);
 
   const gaps: Gap[] = [];
 

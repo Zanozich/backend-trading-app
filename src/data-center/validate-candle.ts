@@ -1,78 +1,64 @@
 import { RawCandle, Candle } from './types';
 
 /**
- * Валидирует одну свечу (одну строку из CSV).
- * Проверяет корректность структуры, значений и диапазонов.
+ * Поддерживаем два формата строк:
+ * - 6 колонок: [ts, open, high, low, close, volume]
+ * - 8+ колонок: [ts, _, _, open, high, low, close, volume, ...]
+ * ts может быть в секундах, миллисекундах или микросекундах.
  */
 export function validateCandle(row: RawCandle): Candle | null {
-  // Проверка базовой структуры строки
-  if (!Array.isArray(row) || row.length < 8) {
-    console.warn('Invalid row structure:', row);
+  if (!Array.isArray(row) || row.length < 6) {
     return null;
   }
 
-  // Распаковка нужных полей по индексам
-  const [timestamp, , , open, high, low, close, volume] = row;
+  let ts: number;
+  let open: number;
+  let high: number;
+  let low: number;
+  let close: number;
+  let volume: number;
 
-  // Проверка корректности timestamp
-  if (typeof timestamp !== 'number' || timestamp <= 0) {
-    console.warn('Invalid timestamp:', timestamp);
-    return null;
+  if (row.length >= 8) {
+    // формат с 8+ колонками
+    [ts, , , open, high, low, close, volume] = row as number[];
+  } else {
+    // формат с 6 колонками
+    [ts, open, high, low, close, volume] = row as number[];
   }
 
-  // Переводим в секунды и проверяем реалистичность
-  const sec = Math.floor(timestamp / 1000);
-  if (sec < 1262304000 || sec > 2051222400) {
-    console.warn('Unrealistic timestamp (converted):', sec);
-    return null;
-  }
-
-  // Проверка типа и валидности чисел OHLC и volume
+  // Проверка чисел
   if (
-    typeof open !== 'number' ||
-    isNaN(open) ||
-    typeof high !== 'number' ||
-    isNaN(high) ||
-    typeof low !== 'number' ||
-    isNaN(low) ||
-    typeof close !== 'number' ||
-    isNaN(close) ||
-    typeof volume !== 'number' ||
-    isNaN(volume)
+    ![ts, open, high, low, close, volume].every(
+      (n) => typeof n === 'number' && Number.isFinite(n),
+    )
   ) {
-    console.warn('Invalid OHLC or volume values:', {
-      open,
-      high,
-      low,
-      close,
-      volume,
-    });
     return null;
   }
 
-  // Проверка логики значений OHLC
+  // Нормализация времени
+  let tsMs: number;
+  if (ts >= 1e15)
+    tsMs = Math.floor(ts / 1000); // микросекунды → мс
+  else if (ts >= 1e12)
+    tsMs = ts; // уже мс
+  else if (ts >= 1e9)
+    tsMs = ts * 1000; // секунды → мс
+  else return null;
+
+  const sec = Math.floor(tsMs / 1000);
+
+  // Диапазон времени (2010-01-01 .. 2035-01-01) — можно подправить при необходимости
+  if (sec < 1262304000 || sec > 2051222400) {
+    return null;
+  }
+
+  // Проверки OHLC
   if (high < Math.max(open, close) || low > Math.min(open, close)) {
-    console.warn('OHLC values inconsistent (high < max(oc), low > min(oc))', {
-      open,
-      high,
-      low,
-      close,
-    });
     return null;
   }
-
   if (low > high) {
-    console.warn('Low greater than high:', { low, high });
     return null;
   }
 
-  // Возврат валидной свечи
-  return {
-    time: sec,
-    open,
-    high,
-    low,
-    close,
-    volume,
-  };
+  return { time: sec, open, high, low, close, volume };
 }

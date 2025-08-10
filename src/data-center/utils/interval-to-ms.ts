@@ -16,8 +16,10 @@ const map: Record<string, number> = {
   '1M': 2_592_000_000, // условно
 };
 
-export function intervalToMs(interval: string): number {
+export function getIntervalMs(interval: string): number {
   const ms = map[interval];
-  if (!ms) throw new Error(`Unknown interval: ${interval}`);
+  if (!ms) throw new Error(`Unsupported interval: ${interval}`);
   return ms;
 }
+
+export { map as INTERVAL_MS_MAP };

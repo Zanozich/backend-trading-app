@@ -5,8 +5,10 @@ import { SymbolEntity } from '../../entities/symbol.entity';
 import { TimeframeEntity } from '../../entities/timeframe.entity';
 
 /**
- * Сохраняет массив свечей в базу данных через TypeORM батчами.
- * Привязывает каждую свечу к заданным symbol и timeframe.
+ * Батч-вставка свечей в Postgres.
+ * Дубликаты по ("symbolId","timeframeId","timestamp") игнорируются на уровне SQL:
+ *   ON CONFLICT ("symbolId","timeframeId","timestamp") DO NOTHING
+ * Пишем "timestamp" в МИЛЛИСЕКУНДАХ → берём из c.time.
  */
 export async function saveCandlesToDb(
   candles: Candle[],
@@ -14,29 +16,44 @@ export async function saveCandlesToDb(
   symbol: SymbolEntity,
   timeframe: TimeframeEntity,
 ): Promise<void> {
-  const BATCH_SIZE = 500; // безопасный размер, можно увеличить до 1000 при необходимости
+  if (!candles.length) return;
+
+  const BATCH_SIZE = 1000;
+  let insertedTotal = 0;
 
   for (let i = 0; i < candles.length; i += BATCH_SIZE) {
-    const chunk = candles.slice(i, i + BATCH_SIZE);
+    const batch = candles.slice(i, i + BATCH_SIZE);
 
-    const entities: CandleEntity[] = chunk.map((c) =>
-      candleRepo.create({
-        timestamp: c.time,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-        volume: c.volume,
-        symbol,
-        timeframe,
-      }),
-    );
+    // Готовим «сырые» значения с явными FK-колонками
+    const values = batch.map((c) => ({
+      timestamp: c.time, // миллисекунды
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      volume: c.volume,
+      symbolId: symbol.id, // camelCase — как в БД
+      timeframeId: timeframe.id, // camelCase — как в БД
+    }));
 
-    await candleRepo.save(entities);
+    // ВАЖНО: для Postgres используем onConflict с кавычками вокруг camelCase колонок
+    const result = await candleRepo
+      .createQueryBuilder()
+      .insert()
+      .values(values as any)
+      .onConflict('("symbolId","timeframeId","timestamp") DO NOTHING')
+      .returning('id') // даёт реальное кол-во вставленных строк
+      .execute();
+
+    const inserted = Array.isArray(result.raw) ? result.raw.length : 0;
+    insertedTotal += inserted;
+
     console.log(
-      `✅ Saved batch ${i / BATCH_SIZE + 1} (${entities.length} candles)`,
+      `✅ Batch ${Math.floor(i / BATCH_SIZE) + 1}: requested=${values.length}, inserted=${inserted}`,
     );
   }
 
-  console.log(`✅ All ${candles.length} candles saved to DB in chunks`);
+  console.log(
+    `✅ Done: requested=${candles.length}, actually_inserted=${insertedTotal}`,
+  );
 }
