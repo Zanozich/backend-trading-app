@@ -7,6 +7,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
+import { DEFAULT_INCLUDE_PARTIAL_LATEST } from 'src/config/limits';
 import {
   ExchangeCode,
   MarketType,
@@ -67,7 +68,7 @@ export class CandlesQueryDto {
   // Отдавать ли текущий формирующийся бар в ответе (в БД не сохраняется)
   @IsOptional()
   @Transform(({ value }) => {
-    if (value == null) return false;
+    if (value == null) return DEFAULT_INCLUDE_PARTIAL_LATEST;
     const v = String(value).toLowerCase();
     return v === 'true' || v === '1' || v === 'yes';
   })

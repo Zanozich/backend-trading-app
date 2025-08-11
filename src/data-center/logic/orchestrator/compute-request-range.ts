@@ -1,5 +1,8 @@
 import { getIntervalMs } from '../../utils/interval-to-ms';
-import { MAX_CANDLES_PER_REQUEST } from '../../../config/limits';
+import {
+  DEFAULT_INCLUDE_PARTIAL_LATEST,
+  MAX_CANDLES_PER_REQUEST,
+} from '../../../config/limits';
 
 export interface ComputeRangeArgs {
   timeframeName: string;
@@ -8,6 +11,7 @@ export interface ComputeRangeArgs {
   limit?: number;
   now?: number; // для тестов можно прокидывать «текущее время»
   includePartialLatest?: boolean; // по умолчанию НЕ включаем незакрытый бар
+  serverTimeMs: number; // есть в твоей версии — начинаем ПО-НАСТОЯЩЕМУ использовать
 }
 
 export interface ComputedRange {
@@ -19,7 +23,7 @@ export interface ComputedRange {
 
 /**
  * Возвращает корректное окно запроса «ровно limit баров», выровненное к границам свечей.
- * Не лезет в будущее, гарантирует минимум 1 бар.
+ * Не лезет в будущее (относительно времени СЕРВЕРА биржи), гарантирует минимум 1 бар.
  */
 export function computeRequestRange(args: ComputeRangeArgs): ComputedRange {
   const {
@@ -28,10 +32,15 @@ export function computeRequestRange(args: ComputeRangeArgs): ComputedRange {
     toTimestamp,
     limit,
     now = Date.now(),
-    includePartialLatest = false,
+    includePartialLatest = DEFAULT_INCLUDE_PARTIAL_LATEST,
+    serverTimeMs,
   } = args;
 
   const step = getIntervalMs(timeframeName);
+
+  // ADDED: «истина времени» — сервер биржи; now остаётся только как тестовый fallback
+  const clock = Number.isFinite(serverTimeMs) ? serverTimeMs : now; // ADDED
+  // END
 
   // 1) нормализуем лимит
   let limitFinal = Number.isFinite(limit as number)
@@ -41,12 +50,12 @@ export function computeRequestRange(args: ComputeRangeArgs): ComputedRange {
   if (limitFinal > MAX_CANDLES_PER_REQUEST)
     limitFinal = MAX_CANDLES_PER_REQUEST;
 
-  // 2) верхняя граница-кандидат — не в будущее
-  let TO = typeof toTimestamp === 'number' ? toTimestamp : now;
-  if (TO > now) TO = now;
+  // 2) верхняя граница-кандидат — не в будущее (относительно clock)
+  let TO = typeof toTimestamp === 'number' ? toTimestamp : clock; // ADDED (раньше было now)
+  if (TO > clock) TO = clock; // ADDED (раньше сравнивали с now)
 
   // Выбираем toAligned: по умолчанию обрезаем до последнего ЗАКРЫТОГО бара
-  const lastClosed = Math.floor((now - 1) / step) * step;
+  const lastClosed = Math.floor((clock - 1) / step) * step; // ADDED (раньше было now)
   const toCandidate = Math.floor(TO / step) * step;
   const toAligned = includePartialLatest
     ? toCandidate

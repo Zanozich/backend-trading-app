@@ -16,6 +16,6 @@ export class MarketDataApiService {
     limit?: number;
     includePartialLatest?: boolean;
   }) {
-    return this.dataCenterService.tryGetCandlesFromDbOrFetch(args);
+    return this.dataCenterService.getCandlesData(args);
   }
 }

@@ -8,7 +8,7 @@ import { TimeframeEntity } from '../entities/timeframe.entity';
 
 import { ExchangeCode, MarketType } from 'src/domain/market.types';
 // Юзкейс-оркестратор: читает БД → дотягивает → сохраняет → перечитывает
-import { tryGetCandlesFromDbOrFetch } from './logic/try-get-candles';
+import { getCandlesFromDbOrFetch } from './logic/get-candles-orchestrator';
 // Read-only чтение диапазона из БД (без автофетча)
 import { getCandlesFromDb as getCandlesFromDbLogic } from './logic/get-candles-from-db';
 
@@ -40,7 +40,7 @@ export class DataCenterService {
    *
    * Все timestamps — миллисекунды (UTC).
    */
-  async tryGetCandlesFromDbOrFetch(args: {
+  async getCandlesData(args: {
     symbolName: string;
     timeframeName: string;
     marketType: MarketType;
@@ -52,7 +52,7 @@ export class DataCenterService {
   }) {
     const provider = this.registry.get(args.exchange ?? 'binance');
 
-    return tryGetCandlesFromDbOrFetch({
+    return getCandlesFromDbOrFetch({
       symbolRepo: this.symbolRepo,
       timeframeRepo: this.timeframeRepo,
       candleRepo: this.candleRepo,

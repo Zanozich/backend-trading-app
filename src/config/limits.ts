@@ -18,3 +18,6 @@ export const REPAIR_JOB_LOOKBACK_DAYS = 7;
 // Сколько последних закрытых баров принудительно пересинхронизировать (upsert) при каждом запросе
 // 0 — отключено; 2–5 — разумные значения. По умолчанию 3.
 export const TAIL_RECONCILIATION_BARS = 3;
+
+// отдавать ли на фронтэнд последнний не полный бар
+export const DEFAULT_INCLUDE_PARTIAL_LATEST = false;

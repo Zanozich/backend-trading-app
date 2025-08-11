@@ -52,23 +52,28 @@ export class BinanceProvider implements MarketDataProvider {
 
     // 2) Нормализация границ
     let from = startTime;
-    const maxEndTime = Math.min(endTime, Date.now());
-    if (!(from < maxEndTime)) return result;
+
+    // доверяем правой границе от оркестратора и расширяем её до конца свечи,
+    // чтобы захватить бар, начинающийся ровно в endTime (inclusive по openTime)
+    const stepMsPerBar = getIntervalMs(interval);
+    const maxEndTime = endTime + (stepMsPerBar - 1);
+    if (from > maxEndTime) return result;
 
     // 3) Размер чанка по времени = длительность бара * лимит Binance (обычно 1000)
-    const stepMsPerBar = getIntervalMs(interval);
     const stepMsPerChunk = stepMsPerBar * BINANCE_PER_REQUEST_LIMIT;
 
     // 4) Идём окнами до конца диапазона
-    while (from < maxEndTime) {
-      const to = Math.min(from + stepMsPerChunk, maxEndTime);
+    while (from <= maxEndTime) {
+      // позволяем взять один бар, если from == maxEndTime
+      // to делаем inclusive по времени, чтобы API точно вернул бар с openTime == from
+      const toInclusive = Math.min(from + stepMsPerChunk - 1, maxEndTime); // ADDED
 
       const { data } = await axios.get(url, {
         params: {
           symbol,
           interval,
           startTime: from,
-          endTime: to,
+          endTime: toInclusive, // ADDED
           limit: BINANCE_PER_REQUEST_LIMIT,
         },
         timeout: 15_000, // таймаут одной сетевой попытки (ретраи — на уровне оркестратора)
@@ -77,7 +82,7 @@ export class BinanceProvider implements MarketDataProvider {
       if (Array.isArray(data) && data.length > 0) {
         for (const item of data) {
           result.push({
-            time: item[0], // мс UTC
+            time: item[0], // мс UTC (open time)
             open: parseFloat(item[1]),
             high: parseFloat(item[2]),
             low: parseFloat(item[3]),
@@ -86,14 +91,26 @@ export class BinanceProvider implements MarketDataProvider {
           });
         }
         // следующий чанк начинаем сразу после последней свечи, чтобы избежать дублей
+        // оставляем +1 мс — Binance фильтрует по openTime >= startTime
         from = data[data.length - 1][0] + 1;
       } else {
         // важный фикс: если окно пустое (до листинга/нет торговли) — пролистываем дальше
-        from = to + 1;
+        // шагаем от inclusve-границы
+        from = toInclusive + 1;
       }
     }
 
     return result;
+  }
+
+  async getServerTimeMs(type: MarketType): Promise<number> {
+    const baseUrl = BINANCE_BASE_URLS[type];
+    const url = `${baseUrl}/time`;
+    const { data } = await axios.get<{ serverTime: number }>(url, {
+      timeout: 10_000,
+    });
+    // Binance возвращает serverTime в миллисекундах
+    return data.serverTime;
   }
 
   /**

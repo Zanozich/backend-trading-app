@@ -9,4 +9,7 @@ export interface MarketDataProvider {
     startTime: number,
     endTime: number,
   ): Promise<Candle[]>;
+
+  // унифицированный метод получения времени сервера биржи
+  getServerTimeMs(type: MarketType): Promise<number>;
 }
