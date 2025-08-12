@@ -3,8 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppDataSource } from './config/typeorm.config';
 
 import { MarketDataApiModule } from './market-data-api/market-data-api.module';
-import { DataCenterModule } from './data-center/data-center.module';
-import { MarketDataModule } from './providers/market-data.module';
+import { DataCenterModule } from './data-center/infrastructure/modules/data-center.module';
+import { MarketDataModule } from './data-center/infrastructure/modules/providers.module';
 
 // когда буду делать repair-job
 // import { ScheduleModule } from '@nestjs/schedule';
