@@ -28,6 +28,7 @@ lerna-debug.log*
 .settings/
 *.sublime-workspace
 .prettierrc
+commit.txt
 
 # IDE - VSCode
 .vscode/*
